@@ -1,1 +1,1 @@
-This contains basic functioning of CRUP operation in mongoose
+This contains basic functioning of CRUD operation in mongoose
