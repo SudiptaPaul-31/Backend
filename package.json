@@ -7,7 +7,8 @@
     "dev": "nodemon",
     "build": "tsc",
     "start": "node dist/index.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "jest"
   },
   "prisma": {
     "schema": "prisma/schema.prisma",
@@ -27,6 +28,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
     "@prisma/client": "^5.22.0",
+    "@stellar/stellar-sdk": "^14.5.0",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
