@@ -7,13 +7,65 @@ function requireEnv(key: string): string {
   return value
 }
 
+/**
+ * CRITICAL: Validate Stellar network to prevent testnet/mainnet mix-ups
+ * Protects against accidental mainnet transactions with testnet keys
+ */
+function validateStellarNetwork(network: string): 'testnet' | 'mainnet' | 'futurenet' {
+  const validNetworks = ['testnet', 'mainnet', 'futurenet'] as const
+  const lowerNetwork = network.toLowerCase()
+
+  if (!validNetworks.includes(lowerNetwork as any)) {
+    throw new Error(
+      `Invalid STELLAR_NETWORK: "${network}". Must be one of: ${validNetworks.join(', ')}`
+    )
+  }
+
+  return lowerNetwork as 'testnet' | 'mainnet' | 'futurenet'
+}
+
+/**
+ * CRITICAL: Validate Stellar secret key format and warn on mainnet in dev
+ */
+function validateStellarKey(secretKey: string, network: 'testnet' | 'mainnet' | 'futurenet'): void {
+  // Stellar secret keys always start with 'S'
+  if (!secretKey.startsWith('S')) {
+    throw new Error('STELLAR_AGENT_SECRET_KEY must start with S (invalid Stellar secret key format)')
+  }
+
+  // Stellar keys are exactly 56 characters
+  if (secretKey.length !== 56) {
+    throw new Error(
+      `STELLAR_AGENT_SECRET_KEY invalid length: ${secretKey.length}. Stellar keys must be 56 characters.`
+    )
+  }
+
+  // Log network configuration
+  const env = process.env.NODE_ENV || 'development'
+  const networkDisplay = network.toUpperCase()
+  console.log(`✓ Stellar Agent configured for ${networkDisplay} (NODE_ENV=${env})`)
+
+  // CRITICAL: Warn if mainnet in development
+  if (network === 'mainnet' && env !== 'production') {
+    console.warn('')
+    console.warn('⚠️  CRITICAL WARNING: Using MAINNET in non-production environment!')
+    console.warn('⚠️  This could result in real financial loss!')
+    console.warn('⚠️  Verify STELLAR_NETWORK and NODE_ENV settings immediately!')
+    console.warn('')
+  }
+}
+
+const stellarNetwork = validateStellarNetwork(requireEnv('STELLAR_NETWORK'))
+const agentSecretKey = requireEnv('STELLAR_AGENT_SECRET_KEY')
+validateStellarKey(agentSecretKey, stellarNetwork)
+
 export const config = {
   port: parseInt(process.env.PORT || '3001'),
   nodeEnv: process.env.NODE_ENV || 'development',
   stellar: {
-    network: requireEnv('STELLAR_NETWORK'),
+    network: stellarNetwork,
     rpcUrl: requireEnv('STELLAR_RPC_URL'),
-    agentSecretKey: requireEnv('AGENT_SECRET_KEY'),
+    agentSecretKey,
     vaultContractId: requireEnv('VAULT_CONTRACT_ID'),
     usdcTokenAddress: requireEnv('USDC_TOKEN_ADDRESS'),
   },
