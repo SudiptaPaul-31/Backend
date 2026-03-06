@@ -11,6 +11,7 @@ import { connectDb } from './db'
 import { scheduleSessionCleanup } from './jobs/sessionCleanup'
 import healthRouter from './routes/health'
 import authRouter from './routes/auth'
+import whatsappRouter from './routes/whatsapp'
 
 const app = express()
 
@@ -18,6 +19,7 @@ const app = express()
 app.use(helmet())
 app.use(cors())
 app.use(express.json())
+app.use(express.urlencoded({ extended: false }))
 
 // Logging and rate limiting
 app.use(requestLogger)
@@ -26,6 +28,7 @@ app.use(rateLimiter)
 // Public routes
 app.use('/health', healthRouter)
 app.use('/api/auth', authRouter)
+app.use('/api/whatsapp', whatsappRouter)
 
 // Protected routes (require valid JWT)
 // All routes mounted below this line are automatically protected.
