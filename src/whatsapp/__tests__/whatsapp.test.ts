@@ -33,9 +33,9 @@ describe('WhatsApp webhook', () => {
     process.env.WALLET_ENCRYPTION_KEY = 'a'.repeat(64)
 
     // Required env vars for config/env.ts
-    process.env.STELLAR_NETWORK = 'TESTNET'
+    process.env.STELLAR_NETWORK = 'testnet'
     process.env.STELLAR_RPC_URL = 'https://example.com'
-    process.env.AGENT_SECRET_KEY = 'SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+    process.env.STELLAR_AGENT_SECRET_KEY = 'SBZVMB74Z76QZ3ZM67NZ7A6TPQ5FK7SAOSMAQVCHCLRUGSXWC5UKAAAA'
     process.env.VAULT_CONTRACT_ID = 'vault-contract'
     process.env.USDC_TOKEN_ADDRESS = 'usdc-token'
     process.env.ANTHROPIC_API_KEY = 'test'
