@@ -1,8 +1,15 @@
 import { Keypair } from '@stellar/stellar-sdk';
 import * as crypto from 'crypto';
 
-const ENCRYPTION_KEY = process.env.WALLET_ENCRYPTION_KEY || '';
 const ALGORITHM = 'aes-256-gcm';
+
+function getEncryptionKey(): string {
+  const key = process.env.WALLET_ENCRYPTION_KEY || '';
+  if (!key || key.length !== 64) {
+    throw new Error('WALLET_ENCRYPTION_KEY must be 64 hex characters (32 bytes)');
+  }
+  return key;
+}
 
 interface CustodialWallet {
   userId: string;
@@ -20,19 +27,15 @@ const walletStore = new Map<string, CustodialWallet>();
  * SECURITY: Never log secret keys. Use environment-based encryption key.
  */
 function encryptSecret(secret: string): { encrypted: string; iv: string; authTag: string } {
-  if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length !== 64) {
-    throw new Error('WALLET_ENCRYPTION_KEY must be 64 hex characters (32 bytes)');
-  }
-  
-  const key = Buffer.from(ENCRYPTION_KEY, 'hex');
+  const key = Buffer.from(getEncryptionKey(), 'hex');
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
-  
+
   let encrypted = cipher.update(secret, 'utf8', 'hex');
   encrypted += cipher.final('hex');
-  
+
   const authTag = cipher.getAuthTag();
-  
+
   return {
     encrypted,
     iv: iv.toString('hex'),
@@ -44,23 +47,19 @@ function encryptSecret(secret: string): { encrypted: string; iv: string; authTag
  * Decrypt secret key
  */
 function decryptSecret(encrypted: string, iv: string, authTag: string): string {
-  if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length !== 64) {
-    throw new Error('WALLET_ENCRYPTION_KEY must be 64 hex characters (32 bytes)');
-  }
-  
-  const key = Buffer.from(ENCRYPTION_KEY, 'hex');
+  const key = Buffer.from(getEncryptionKey(), 'hex');
   const decipher = crypto.createDecipheriv(ALGORITHM, key, Buffer.from(iv, 'hex'));
   decipher.setAuthTag(Buffer.from(authTag, 'hex'));
-  
+
   let decrypted = decipher.update(encrypted, 'hex', 'utf8');
   decrypted += decipher.final('utf8');
-  
+
   return decrypted;
 }
 
 /**
  * Create custodial wallet for user
- * 
+ *
  * SECURITY NOTE: This is a custodial solution where the backend holds user keys.
  * Users trust the backend to secure their funds. Consider non-custodial alternatives
  * for production use cases requiring higher security guarantees.
@@ -69,10 +68,10 @@ export async function createCustodialWallet(userId: string): Promise<CustodialWa
   if (walletStore.has(userId)) {
     throw new Error(`Wallet already exists for user ${userId}`);
   }
-  
+
   const keypair = Keypair.random();
   const { encrypted, iv, authTag } = encryptSecret(keypair.secret());
-  
+
   const wallet: CustodialWallet = {
     userId,
     publicKey: keypair.publicKey(),
@@ -80,11 +79,11 @@ export async function createCustodialWallet(userId: string): Promise<CustodialWa
     iv,
     authTag,
   };
-  
+
   walletStore.set(userId, wallet);
-  
+
   console.log(`[Wallet] Created for user ${userId}: ${wallet.publicKey}`);
-  
+
   return wallet;
 }
 
@@ -100,11 +99,11 @@ export async function getWalletByUserId(userId: string): Promise<CustodialWallet
  */
 export async function getKeypairForUser(userId: string): Promise<Keypair> {
   const wallet = await getWalletByUserId(userId);
-  
+
   if (!wallet) {
     throw new Error(`No wallet found for user ${userId}`);
   }
-  
+
   const secret = decryptSecret(wallet.encryptedSecret, wallet.iv, wallet.authTag);
   return Keypair.fromSecret(secret);
 }
