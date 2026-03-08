@@ -1,10 +1,18 @@
-export {};
+import type { Network } from '@prisma/client'
 
-declare module 'express-serve-static-core' {
-  interface Request {
-    /** Authenticated user ID (UUID) */
-    userId?: string;
-    /** Authenticated user's Stellar public key */
-    stellarPubKey?: string;
+declare global {
+  namespace Express {
+    interface Request {
+      userId?: string
+      stellarPubKey?: string
+      auth?: {
+        userId: string
+        sessionId: string
+        walletAddress: string
+        network: Network
+      }
+    }
   }
 }
+
+export {}
