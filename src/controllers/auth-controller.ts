@@ -1,15 +1,13 @@
 import { Request, Response } from 'express';
 import { randomBytes } from 'crypto';
 import { Keypair } from '@stellar/stellar-sdk';
-import { PrismaClient } from '@prisma/client';
 import { JwtAdapter, config } from '../config';
 import { logger } from '../utils/logger';
+import db from '../db';
 import {
   stellarVerification,
   _nonceStoreForTests as nonceStore,
 } from '../utils/stellar/stellar-verification';
-
-const prisma = new PrismaClient();
 
 // Controllers
 
@@ -110,13 +108,13 @@ export async function verify(req: Request, res: Response): Promise<void> {
 
   try {
     // 5. Create or fetch user
-    let user = await prisma.user.findUnique({
+    let user = await db.user.findUnique({
       where: { walletAddress: stellarPubKey },
     });
 
     if (!user) {
       // Auto-create user + empty portfolio position
-      user = await prisma.user.create({
+      user = await db.user.create({
         data: {
           walletAddress: stellarPubKey,
           network,
@@ -143,7 +141,7 @@ export async function verify(req: Request, res: Response): Promise<void> {
     }
 
     // 7. Persist session
-    await prisma.session.create({
+    await db.session.create({
       data: {
         userId: user.id,
         token,
@@ -179,7 +177,7 @@ export async function logout(req: Request, res: Response): Promise<void> {
   const token = authorization.split(' ')[1] ?? '';
 
   try {
-    await prisma.session.deleteMany({ where: { token } });
+    await db.session.deleteMany({ where: { token } });
     logger.info(`[Auth] Session revoked for user ${req.userId}`);
     res.status(200).json({ message: 'Logged out successfully' });
   } catch (error) {
