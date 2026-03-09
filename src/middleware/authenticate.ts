@@ -1,8 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { JwtAdapter } from '../config';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import db from '../db';
 
 export class AuthMiddleware {
   /**
@@ -43,7 +41,7 @@ export class AuthMiddleware {
       }
 
       // 2. Look up live session in the database (prevents session reuse after logout)
-      const session = await prisma.session.findUnique({
+      const session = await db.session.findUnique({
         where: { token },
         include: { user: true },
       });
@@ -56,7 +54,7 @@ export class AuthMiddleware {
       // 3. Reject expired sessions
       if (session.expiresAt < new Date()) {
         // Clean up the stale session row
-        await prisma.session.delete({ where: { token } }).catch(() => undefined);
+        await db.session.delete({ where: { token } }).catch(() => undefined);
         res.status(401).json({ error: 'Session expired' });
         return;
       }
