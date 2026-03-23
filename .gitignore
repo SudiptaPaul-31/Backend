@@ -2,3 +2,9 @@ node_modules
 .env
 dist
 logs/*.log
+coverage/
+
+
+.agents/
+skills-lock.json
+postgres/

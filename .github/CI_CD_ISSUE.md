@@ -14,7 +14,8 @@ We need a GitHub Actions workflow so that:
 
 - Code quality is enforced (TypeScript strict, no type errors).
 - The project always builds.
-- The test suite must pass before merge.
+- Prisma schema is generated and migrations are applied against a test Postgres instance.
+- The Jest test suite must pass before merge.
 - Maintainers get fast feedback on PRs without manual checks.
 
 This matches our current backend: **Node.js**, **TypeScript**, **Express**, with scripts `lint` (`tsc --noEmit`), `build` (`tsc`), and `test` (to be run in CI).
@@ -39,6 +40,8 @@ This matches our current backend: **Node.js**, **TypeScript**, **Express**, with
    - Set up the **Node.js** version used by the project (e.g. Node 20 LTS).
    - **Cache** npm dependencies (e.g. `~/.npm` or `node_modules`) to speed up later runs.
    - Install dependencies with **`npm ci`** (reproducible installs).
+  - **Generate Prisma client** (`npx prisma generate`).
+  - **Apply migrations** to the test database (`npx prisma migrate deploy`).
    - **Lint**: run **`npm run lint`** (TypeScript type-check only; must pass).
    - **Build**: run **`npm run build`** (must succeed).
    - **Test**: run **`npm test`** (must pass; add or keep a `test` script in `package.json`).
@@ -51,6 +54,8 @@ This matches our current backend: **Node.js**, **TypeScript**, **Express**, with
 - [ ] Workflow runs on every PR (and on push to `main`/`develop`).
 - [ ] Pipeline **fails** if TypeScript lint fails (`npm run lint`).
 - [ ] Pipeline **fails** if the build fails (`npm run build`).
+- [ ] Pipeline **fails** if Prisma generation fails (`npx prisma generate`).
+- [ ] Pipeline **fails** if database migrations fail (`npx prisma migrate deploy`).
 - [ ] Pipeline **fails** if tests fail (`npm test`).
 - [ ] Pipeline **passes** only when lint, build, and tests all succeed.
 - [ ] `package.json` has a **`test`** script (placeholder or real test runner) so `npm test` is defined.
@@ -64,4 +69,5 @@ This matches our current backend: **Node.js**, **TypeScript**, **Express**, with
 - If there is no test framework yet, use a minimal script, e.g.  
   `"test": "echo \"No tests yet\" && exit 0"`  
   and replace it when adding Jest, Vitest, or another runner.
+- Ensure the workflow provisions a Postgres service for `DATABASE_URL` and runs Prisma migrations before executing `npm test`.
 - Optional later improvements: add ESLint/Prettier and format checks, or a separate `lint:style` job.

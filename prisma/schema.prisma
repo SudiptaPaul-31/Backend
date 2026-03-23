@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Network {
+  MAINNET
+  TESTNET
+  FUTURENET
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  YIELD_CLAIM
+  REBALANCE
+  SWAP
+}
+
+enum TransactionStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+  CANCELLED
+}
+
+enum PositionStatus {
+  ACTIVE
+  CLOSED
+  LIQUIDATED
+}
+
+enum AgentAction {
+  DEPOSIT
+  WITHDRAW
+  REBALANCE
+  ANALYZE
+  ALERT
+  CLAIM_YIELD
+}
+
+enum AgentStatus {
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+model User {
+  id            String   @id @default(uuid())
+  walletAddress String   @unique
+  network       Network  @default(MAINNET)
+  displayName   String?
+  email         String?  @unique
+  avatarUrl     String?
+  riskTolerance Int      @default(5)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions     Session[]
+  positions    Position[]
+  transactions Transaction[]
+  agentLogs    AgentLog[]
+
+  @@index([walletAddress])
+  @@map("users")
+}
+
+model Session {
+  id            String   @id @default(uuid())
+  userId        String
+  token         String   @unique
+  walletAddress String
+  network       Network
+  expiresAt     DateTime
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Position {
+  id              String         @id @default(uuid())
+  userId          String
+  protocolName    String
+  assetSymbol     String
+  assetAddress    String?
+  depositedAmount Decimal        @db.Decimal(36, 18)
+  currentValue    Decimal        @db.Decimal(36, 18)
+  yieldEarned     Decimal        @default(0) @db.Decimal(36, 18)
+  status          PositionStatus @default(ACTIVE)
+  openedAt        DateTime       @default(now())
+  closedAt        DateTime?
+  updatedAt       DateTime       @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions   Transaction[]
+  yieldSnapshots YieldSnapshot[]
+
+  @@index([userId])
+  @@index([protocolName])
+  @@map("positions")
+}
+
+model Transaction {
+  id           String            @id @default(uuid())
+  userId       String
+  positionId   String?
+  txHash       String?           @unique
+  type         TransactionType
+  status       TransactionStatus @default(PENDING)
+  assetSymbol  String
+  amount       Decimal           @db.Decimal(36, 18)
+  fee          Decimal?          @db.Decimal(36, 18)
+  network      Network
+  protocolName String?
+  memo         String?
+  confirmedAt  DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  position Position? @relation(fields: [positionId], references: [id])
+
+  @@index([userId])
+  @@index([txHash])
+  @@index([positionId])
+  @@map("transactions")
+}
+
+model YieldSnapshot {
+  id              String   @id @default(uuid())
+  positionId      String
+  apy             Decimal  @db.Decimal(10, 6)
+  yieldAmount     Decimal  @db.Decimal(36, 18)
+  principalAmount Decimal  @db.Decimal(36, 18)
+  snapshotAt      DateTime @default(now())
+
+  position Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+
+  @@index([positionId])
+  @@index([snapshotAt])
+  @@map("yield_snapshots")
+}
+
+model ProtocolRate {
+  id           String   @id @default(uuid())
+  protocolName String
+  assetSymbol  String
+  supplyApy    Decimal  @db.Decimal(10, 6)
+  borrowApy    Decimal? @db.Decimal(10, 6)
+  tvl          Decimal? @db.Decimal(36, 2)
+  network      Network
+  fetchedAt    DateTime @default(now())
+
+  @@unique([protocolName, assetSymbol, network, fetchedAt])
+  @@index([protocolName, assetSymbol])
+  @@index([fetchedAt])
+  @@map("protocol_rates")
+}
+
+model AgentLog {
+  id           String      @id @default(uuid())
+  userId       String
+  action       AgentAction
+  status       AgentStatus
+  reasoning    String?     @db.Text
+  inputData    Json?
+  outputData   Json?
+  errorMessage String?
+  durationMs   Int?
+  createdAt    DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("agent_logs")
+}
