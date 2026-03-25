@@ -18,6 +18,7 @@ import transactionsRouter from './routes/transactions'
 import protocolsRouter from './routes/protocols'
 import depositRouter from './routes/deposit'
 import withdrawRouter from './routes/withdraw'
+import vaultRouter from './routes/vault'
 
 const app = express()
 
@@ -41,6 +42,7 @@ app.use('/api/transactions', transactionsRouter)
 app.use('/api/protocols', protocolsRouter)
 app.use('/api/deposit', depositRouter)
 app.use('/api/withdraw', withdrawRouter)
+app.use('/api/vault', vaultRouter)
 
 // Global error handler — must always be last
 app.use(errorHandler)
