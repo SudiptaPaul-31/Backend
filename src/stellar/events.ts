@@ -1,5 +1,6 @@
 import { rpc, scValToNative, xdr } from '@stellar/stellar-sdk';
 import { PrismaClient, TransactionType, TransactionStatus } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 import { getRpcServer } from './client';
 import { ContractEvent, DepositEvent, WithdrawEvent, RebalanceEvent } from './types';
 import { logger } from '../utils/logger';
@@ -75,7 +76,7 @@ async function handleDepositEvent(depositData: DepositEvent, event: ContractEven
       type: TransactionType.DEPOSIT,
       status: TransactionStatus.CONFIRMED,
       assetSymbol: 'USDC', // TODO: Extract from event if available
-      amount: BigInt(depositData.amount),
+      amount: depositData.amount,
       network: user.network,
       confirmedAt: new Date(),
     },
@@ -96,10 +97,10 @@ async function handleDepositEvent(depositData: DepositEvent, event: ContractEven
       where: { id: position.id },
       data: {
         depositedAmount: {
-          increment: BigInt(depositData.amount),
+          increment: depositData.amount,
         },
         currentValue: {
-          increment: BigInt(depositData.amount),
+          increment: depositData.amount,
         },
         updatedAt: new Date(),
       },
@@ -117,8 +118,8 @@ async function handleDepositEvent(depositData: DepositEvent, event: ContractEven
         userId: user.id,
         protocolName: 'vault',
         assetSymbol: 'USDC',
-        depositedAmount: BigInt(depositData.amount),
-        currentValue: BigInt(depositData.amount),
+        depositedAmount: depositData.amount,
+        currentValue: depositData.amount,
         yieldEarned: 0,
       },
     });
@@ -158,7 +159,7 @@ async function handleWithdrawEvent(withdrawData: WithdrawEvent, event: ContractE
       type: TransactionType.WITHDRAWAL,
       status: TransactionStatus.CONFIRMED,
       assetSymbol: 'USDC',
-      amount: BigInt(withdrawData.amount),
+      amount: withdrawData.amount,
       network: user.network,
       confirmedAt: new Date(),
     },
@@ -175,8 +176,8 @@ async function handleWithdrawEvent(withdrawData: WithdrawEvent, event: ContractE
 
   if (position) {
     // Update position
-    const newDepositedAmount = position.depositedAmount - BigInt(withdrawData.amount);
-    const newCurrentValue = position.currentValue - BigInt(withdrawData.amount);
+    const newDepositedAmount = new Decimal(position.depositedAmount).minus(withdrawData.amount);
+    const newCurrentValue = new Decimal(position.currentValue).minus(withdrawData.amount);
 
     await prisma.position.update({
       where: { id: position.id },
