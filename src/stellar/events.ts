@@ -290,11 +290,12 @@ async function loadLastProcessedLedger(): Promise<number> {
     return cursor.lastProcessedLedger;
   }
 
-  // First time - start from latest
+  // First time - start from one before latest so we catch recent events
   const server = getRpcServer();
   const latestLedger = await server.getLatestLedger();
-  logger.info(`[Event Listener] First run, starting from ledger ${latestLedger.sequence}`);
-  return latestLedger.sequence;
+  const startLedger = Math.max(0, latestLedger.sequence - 1);
+  logger.info(`[Event Listener] First run, starting from ledger ${startLedger}`);
+  return startLedger;
 }
 
 /**
@@ -323,7 +324,7 @@ async function fetchEvents(startLedger: number): Promise<void> {
   try {
     const latestLedger = await server.getLatestLedger();
 
-    if (startLedger >= latestLedger.sequence) {
+    if (startLedger > latestLedger.sequence) {
       return; // No new ledgers
     }
 

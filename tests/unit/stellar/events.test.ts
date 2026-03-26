@@ -105,8 +105,8 @@ describe('Vault Contract Events', () => {
                     userId: user.id,
                     protocolName: 'vault',
                     assetSymbol: 'USDC',
-                    depositedAmount: 5000000000n,
-                    currentValue: 5000000000n,
+                    depositedAmount: '5000000000',
+                    currentValue: '5000000000',
                 },
             });
 
