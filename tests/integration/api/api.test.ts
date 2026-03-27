@@ -15,10 +15,21 @@ const mockDb = {
   agentLog: { findFirst: jest.fn() },
 }
 
+const mockDeposit = jest.fn()
+const mockWithdraw = jest.fn()
+
 jest.mock('../../../src/db', () => ({
   __esModule: true,
   default: mockDb,
   db: mockDb,
+}))
+
+jest.mock('../../../src/stellar/contract', () => ({
+  deposit: (...args: unknown[]) => mockDeposit(...args),
+  withdraw: (...args: unknown[]) => mockWithdraw(...args),
+  getOnChainBalance: jest.fn(),
+  getOnChainAPY: jest.fn(),
+  getActiveProtocol: jest.fn(),
 }))
 
 import app from '../../../src/index'
@@ -37,6 +48,16 @@ describe('API integration routes', () => {
       network: 'TESTNET',
       expiresAt: new Date(Date.now() + 60_000),
       user: { id: userId, isActive: true },
+    })
+    mockDeposit.mockResolvedValue({
+      hash: 'server-generated-hash-0002',
+      status: 'success',
+      ledger: 88,
+    })
+    mockWithdraw.mockResolvedValue({
+      hash: 'withdraw-generated-hash-0003',
+      status: 'success',
+      ledger: 89,
     })
   })
 
@@ -131,7 +152,6 @@ describe('API integration routes', () => {
         .set('Authorization', `Bearer ${token}`)
         .send({
           userId,
-          txHash: 'duplicate-hash-value-0001',
           amount: 100,
           assetSymbol: 'USDC',
           protocolName: 'Blend',
@@ -146,7 +166,7 @@ describe('API integration routes', () => {
       mockDb.transaction.findUnique.mockResolvedValue(null)
       mockDb.transaction.create.mockResolvedValue({
         id: 'tx-2',
-        txHash: 'new-hash-value-0002',
+        txHash: 'server-generated-hash-0002',
         status: 'PENDING',
         amount: 100,
         assetSymbol: 'USDC',
@@ -158,7 +178,6 @@ describe('API integration routes', () => {
         .set('Authorization', `Bearer ${token}`)
         .send({
           userId,
-          txHash: 'new-hash-value-0002',
           amount: 100,
           assetSymbol: 'USDC',
           protocolName: 'Blend',
@@ -168,7 +187,7 @@ describe('API integration routes', () => {
       expect(res.body.whatsappReply).toEqual(expect.any(String))
       expect(res.body.transaction).toEqual(
         expect.objectContaining({
-          txHash: 'new-hash-value-0002',
+          txHash: 'server-generated-hash-0002',
           amount: 100,
         }),
       )

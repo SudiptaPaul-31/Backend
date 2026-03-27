@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import db from '../db'
 import { requireAuth } from '../middleware/auth'
+import { withdraw as submitWithdraw } from '../stellar/contract'
 import { formatWithdrawReply } from '../whatsapp/formatters'
 
 const router = Router()
@@ -35,9 +36,25 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
     return res.status(404).json({ error: 'User not found' })
   }
 
+  const onChainTransaction = await submitWithdraw(
+    parsed.data.userId,
+    req.auth.walletAddress,
+    parsed.data.amount,
+  )
+
+  const existing = await db.transaction.findUnique({
+    where: { txHash: onChainTransaction.hash },
+    select: { id: true },
+  })
+
+  if (existing) {
+    return res.status(409).json({ error: 'Duplicate transaction hash' })
+  }
+
   const transaction = await db.transaction.create({
     data: {
       userId: parsed.data.userId,
+      txHash: onChainTransaction.hash,
       type: 'WITHDRAWAL',
       status: 'PENDING',
       assetSymbol: parsed.data.assetSymbol,

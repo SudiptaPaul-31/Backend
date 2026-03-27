@@ -2,13 +2,13 @@ import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import db from '../db'
 import { requireAuth } from '../middleware/auth'
+import { deposit as submitDeposit } from '../stellar/contract'
 import { formatDepositReply } from '../whatsapp/formatters'
 
 const router = Router()
 
 const depositSchema = z.object({
   userId: z.string().uuid(),
-  txHash: z.string().min(16),
   amount: z.number().positive(),
   assetSymbol: z.string().min(1),
   protocolName: z.string().min(1).optional(),
@@ -36,8 +36,14 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
     return res.status(404).json({ error: 'User not found' })
   }
 
+  const onChainTransaction = await submitDeposit(
+    parsed.data.userId,
+    req.auth.walletAddress,
+    parsed.data.amount,
+  )
+
   const existing = await db.transaction.findUnique({
-    where: { txHash: parsed.data.txHash },
+    where: { txHash: onChainTransaction.hash },
     select: { id: true },
   })
 
@@ -48,7 +54,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
   const transaction = await db.transaction.create({
     data: {
       userId: parsed.data.userId,
-      txHash: parsed.data.txHash,
+      txHash: onChainTransaction.hash,
       type: 'DEPOSIT',
       status: 'PENDING',
       assetSymbol: parsed.data.assetSymbol,
