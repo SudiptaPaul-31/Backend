@@ -1,18 +1,20 @@
 import {
+  Keypair,
   Contract,
   rpc,
   TransactionBuilder,
-  Operation,
+  Transaction,
   BASE_FEE,
   xdr,
   scValToNative,
   nativeToScVal,
-  Address,
 } from '@stellar/stellar-sdk';
 import { getRpcServer, getNetworkPassphrase, getAgentKeypair, submitTransaction, waitForConfirmation } from './client';
+import { getKeypairForUser } from './wallet';
 import { OnChainBalance, TransactionResult } from './types';
 
 const VAULT_CONTRACT_ID = process.env.VAULT_CONTRACT_ID || '';
+const STROOPS_PER_TOKEN = 10_000_000n;
 
 /**
  * Get vault contract instance
@@ -27,13 +29,15 @@ function getVaultContract(): Contract {
 /**
  * Build contract invocation transaction
  */
-async function buildContractCall(method: string, args: xdr.ScVal[]): Promise<any> {
+async function buildContractCall(
+  method: string,
+  args: xdr.ScVal[],
+  sourcePublicKey: string = getAgentKeypair().publicKey(),
+): Promise<Transaction> {
   const server = getRpcServer();
   const contract = getVaultContract();
-  const keypair = getAgentKeypair();
-  
-  const account = await server.getAccount(keypair.publicKey());
-  
+  const account = await server.getAccount(sourcePublicKey);
+
   const tx = new TransactionBuilder(account, {
     fee: BASE_FEE,
     networkPassphrase: getNetworkPassphrase(),
@@ -41,8 +45,35 @@ async function buildContractCall(method: string, args: xdr.ScVal[]): Promise<any
     .addOperation(contract.call(method, ...args))
     .setTimeout(30)
     .build();
-  
   return tx;
+}
+
+function toContractAmount(amount: number): bigint {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('Amount must be a positive number');
+  }
+
+  return BigInt(Math.round(amount * Number(STROOPS_PER_TOKEN)));
+}
+
+async function executeWriteContractCall(
+  method: string,
+  args: xdr.ScVal[],
+  signer: Keypair,
+): Promise<TransactionResult> {
+  const server = getRpcServer();
+  const tx = await buildContractCall(method, args, signer.publicKey());
+  const prepared = await server.prepareTransaction(tx);
+  prepared.sign(signer);
+
+  const txHash = await submitTransaction(prepared);
+  const result = await waitForConfirmation(txHash);
+
+  if (result.status !== 'success') {
+    throw new Error(`Transaction ${method} failed on-chain`);
+  }
+
+  return result;
 }
 
 /**
@@ -102,18 +133,9 @@ export async function triggerRebalance(
 ): Promise<TransactionResult> {
   const protocolScVal = nativeToScVal(protocol, { type: 'string' });
   const apyScVal = nativeToScVal(expectedApyBasisPoints, { type: 'u32' });
-  
-  const tx = await buildContractCall('rebalance', [protocolScVal, apyScVal]);
-  
-  const server = getRpcServer();
   const keypair = getAgentKeypair();
-  
-  // Prepare transaction
-  const prepared = await server.prepareTransaction(tx);
-  prepared.sign(keypair);
-  
-  const txHash = await submitTransaction(prepared);
-  return await waitForConfirmation(txHash);
+
+  return executeWriteContractCall('rebalance', [protocolScVal, apyScVal], keypair);
 }
 
 /**
@@ -121,15 +143,37 @@ export async function triggerRebalance(
  */
 export async function updateTotalAssets(newTotalStroops: string): Promise<TransactionResult> {
   const amountScVal = nativeToScVal(BigInt(newTotalStroops), { type: 'i128' });
-  
-  const tx = await buildContractCall('update_total_assets', [amountScVal]);
-  
-  const server = getRpcServer();
   const keypair = getAgentKeypair();
-  
-  const prepared = await server.prepareTransaction(tx);
-  prepared.sign(keypair);
-  
-  const txHash = await submitTransaction(prepared);
-  return await waitForConfirmation(txHash);
+
+  return executeWriteContractCall('update_total_assets', [amountScVal], keypair);
+}
+
+/**
+ * Submit a user-signed deposit transaction to the vault contract.
+ */
+export async function deposit(
+  userId: string,
+  userAddress: string,
+  amount: number,
+): Promise<TransactionResult> {
+  const signer = await getKeypairForUser(userId);
+  const userScVal = nativeToScVal(userAddress, { type: 'address' });
+  const amountScVal = nativeToScVal(toContractAmount(amount), { type: 'i128' });
+
+  return executeWriteContractCall('deposit', [userScVal, amountScVal], signer);
+}
+
+/**
+ * Submit a user-signed withdrawal transaction to the vault contract.
+ */
+export async function withdraw(
+  userId: string,
+  userAddress: string,
+  amount: number,
+): Promise<TransactionResult> {
+  const signer = await getKeypairForUser(userId);
+  const userScVal = nativeToScVal(userAddress, { type: 'address' });
+  const amountScVal = nativeToScVal(toContractAmount(amount), { type: 'i128' });
+
+  return executeWriteContractCall('withdraw', [userScVal, amountScVal], signer);
 }

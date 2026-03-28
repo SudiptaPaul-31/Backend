@@ -20,10 +20,20 @@ const mockDb = {
   agentLog: { findFirst: jest.fn() },
 };
 
+const mockDeposit = jest.fn();
+
 jest.mock('../../../src/db', () => ({
   __esModule: true,
   default: mockDb,
   db: mockDb,
+}));
+
+jest.mock('../../../src/stellar/contract', () => ({
+  deposit: (...args: unknown[]) => mockDeposit(...args),
+  withdraw: jest.fn(),
+  getOnChainBalance: jest.fn(),
+  getOnChainAPY: jest.fn(),
+  getActiveProtocol: jest.fn(),
 }));
 
 import request from 'supertest';
@@ -43,7 +53,6 @@ const SESSION = {
 
 const VALID_DEPOSIT = {
   userId: USER_ID,
-  txHash: 'validhash0000000001',
   amount: 100,
   assetSymbol: 'USDC',
   protocolName: 'Blend',
@@ -59,9 +68,14 @@ describe('Deposit route', () => {
     mockDb.session.findUnique.mockResolvedValue(SESSION);
     mockDb.user.findUnique.mockResolvedValue({ id: USER_ID, network: 'TESTNET' });
     mockDb.transaction.findUnique.mockResolvedValue(null);
+    mockDeposit.mockResolvedValue({
+      hash: 'chain-hash-0000000001',
+      status: 'success',
+      ledger: 101,
+    });
     mockDb.transaction.create.mockResolvedValue({
       id: 'tx-new',
-      txHash: VALID_DEPOSIT.txHash,
+      txHash: 'chain-hash-0000000001',
       status: 'PENDING',
       amount: VALID_DEPOSIT.amount,
       assetSymbol: VALID_DEPOSIT.assetSymbol,
@@ -113,14 +127,6 @@ describe('Deposit route', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 400 when txHash is too short', async () => {
-    const res = await request(app)
-      .post('/api/deposit')
-      .set(authHeader())
-      .send({ ...VALID_DEPOSIT, txHash: 'short' });
-    expect(res.status).toBe(400);
-  });
-
   it('returns 400 when amount is zero or negative', async () => {
     const res = await request(app)
       .post('/api/deposit')
@@ -169,7 +175,7 @@ describe('Deposit route', () => {
       .send(VALID_DEPOSIT);
     expect(res.status).toBe(201);
     expect(res.body.transaction).toMatchObject({
-      txHash: VALID_DEPOSIT.txHash,
+      txHash: 'chain-hash-0000000001',
       amount: VALID_DEPOSIT.amount,
       assetSymbol: VALID_DEPOSIT.assetSymbol,
     });
@@ -190,13 +196,18 @@ describe('Deposit route', () => {
       .post('/api/deposit')
       .set(authHeader())
       .send(VALID_DEPOSIT);
+    expect(mockDeposit).toHaveBeenCalledWith(
+      USER_ID,
+      SESSION.walletAddress,
+      VALID_DEPOSIT.amount,
+    );
     expect(mockDb.transaction.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           type: 'DEPOSIT',
           status: 'PENDING',
           userId: USER_ID,
-          txHash: VALID_DEPOSIT.txHash,
+          txHash: 'chain-hash-0000000001',
         }),
       }),
     );
